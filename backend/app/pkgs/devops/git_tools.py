@@ -1,25 +1,25 @@
+import os
 import subprocess
 from config import GIT_TOKEN, GIT_URL, GIT_USERNAME, GIT_EMAIL
 
-def pullCode(ws_path, repo_path, base_branch, feature_branch):    
-    result = subprocess.run(
-        ['mkdir', '-p', ws_path], capture_output=True, text=True)
-    if result.returncode != 0:
-        print(result.stderr)
-        return False, result.stderr
+def pullCode(ws_path, repo_path, base_branch, feature_branch):
+    try:
+        os.makedirs(ws_path, exist_ok=True)
+    except Exception as e:
+        return False, "mkdir failed: "+str(e)
 
     gitUrl = genCloneUrl(repo_path)
     print(f"pullCode start {gitUrl} {base_branch} {repo_path} {ws_path}")
     result = subprocess.run(['git', 'clone', '-b', base_branch, gitUrl, repo_path], capture_output=True, text=True, cwd=ws_path)
     if result.returncode != 0:
         print(result.stderr)
-        return False, result.stderr
+        return False, "git clone failed: "+result.stderr
 
     result = subprocess.run(
         ['git', 'checkout', '-b', feature_branch], capture_output=True, text=True, cwd=ws_path+'/'+repo_path)
     if result.returncode != 0:
         print(result.stderr)
-        return False, result.stderr
+        return False, "git checkout branch failed: "+result.stderr
 
     print(f"Code clone success. in {ws_path}")
     return True, f"Code clone success. in {ws_path}"
@@ -34,15 +34,13 @@ def pushCode(wsPath, gitPath, fatureBranch, commitMsg):
 
     result = subprocess.run(
         ['git', 'add', '.'], capture_output=True, text=True, cwd=gitCwd)
-    if result.returncode != 0:
-        print(result.stderr)
-        print(result.stdout)
+    print(result.stderr)
+    print(result.stdout)
     
     result = subprocess.run(
         ['git', 'commit', '-m', commitMsg], capture_output=True, text=True, cwd=gitCwd)
-    if result.returncode != 0:
-        print(result.stdout)
-        print(result.stderr)
+    print(result.stdout)
+    print(result.stderr)
 
     gitUrl = genCloneUrl(gitPath)
     print(f"pushCode start {gitUrl} {fatureBranch} {gitPath} {wsPath}")

@@ -4,15 +4,15 @@ import time
 from app.pkgs.tools.llm import chatCompletion
 from app.pkgs.tools.utils_tool import fix_llm_json_str
 from app.pkgs.prompt.subtask_interface import SubtaskInterface
-from app.pkgs.knowledge.app_info import getServiceSpecification, getServiceStruct
+from app.pkgs.knowledge.app_info import getServiceSpecification
 from config import MODE
-from app.pkgs.tools.i18b import getCurrentLanguageName
 
 class SubtaskBasic(SubtaskInterface):
     def splitTask(self, feature, serviceName, appBasePrompt, projectInfo, projectLib, serviceStruct, appID):
+        #return setpGenCode(TEST_PSEUDOCODE, feature, appBasePrompt, "- You can choose any appropriate development language", serviceStruct)
         if MODE == "FAKE":
-            time.sleep(10)
-            jsonData = parse_chat(TEST_RESULT)
+            time.sleep(5)
+            jsonData = parse_chat(FAKE_SUBTASK)
             return jsonData, True
         
         # get libs 
@@ -46,7 +46,8 @@ def setpGenCode(pseudocode, feature, appBasePrompt, specification, serviceStruct
     context.append({
         "role": "system",
         "content": """
-As a senior full stack developer, you are very diligent and good at writing complete code. 
+NOTICE
+Role: As a senior full stack developer, you are very diligent and good at writing complete code. 
 You will get "Development specification" and "Development requirement" and "Pseudocode" for write the final complete code that works correctly.
 Please note that the code should be fully functional. No placeholders no todo ensure that all code can run in production environment correctly.
 """+appBasePrompt+""" """})
@@ -74,6 +75,7 @@ Pseudocode:
 Now complete all codes according to the above information including ALL code, it is going to be a long response.
 Please note that the code should be fully functional. No placeholders no todo ensure that all code can run in production environment correctly.
 
+You will output the content of each file including ALL code.
 Each code file must strictly follow a markdown code block format, where the following tokens must be replaced such that
 FILEPATH is the lowercase file name including the file extension
 LANG is the markup code block language for the code's language
@@ -84,6 +86,11 @@ filepath:FILEPATH
 code explanation: CODE_EXPLANATION
 ```LANG
 CODE```
+
+Please note that the code should be fully functional. No placeholders.
+
+Make sure that files contain all imports, types etc. The code should be fully functional. Make sure that code in different files are compatible with each other.
+Before you finish, double check that all parts of the architecture is present in the files.
 """
     })
 
@@ -204,6 +211,7 @@ You should only directly respond in JSON format as described below, Ensure the r
     })
 
     data, success = chatCompletion(context)
+    data = fix_llm_json_str(data)
 
     return json.loads(data), success
 
@@ -233,11 +241,210 @@ def parse_chat(chat):
     # Return the files
     return files
 
-# just for test
-TEST_RESULT = """filepath:index.html
-code explanation: This file is the main HTML file for the game interface. It contains the structure of the game interface and includes the necessary CSS and JavaScript files.
+FAKE_SUBTASK = """
+filepath:index.html
+code explanation: This is the HTML file for the game interface. It includes a canvas element for rendering the game and a link to the CSS file for styling.
 
 ```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Snake Game</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <script src="script.js"></script>
+</body>
+</html>
+```
+
+filepath:style.css
+code explanation: This is the CSS file to style the game interface. It sets a border for the game canvas.
+
+```css
+#gameCanvas {
+    border: 1px solid black;
+}
+```
+
+filepath:script.js
+code explanation: This is the JavaScript file to handle the game logic. It defines the Snake, Food, and Game classes, as well as event listeners for keyboard input.
+
+```javascript
+// Snake class to represent the snake in the game
+class Snake {
+    constructor() {
+        // Initialize snake properties
+        this.direction = "right";
+        this.body = [
+            { x: 10, y: 10 },
+            { x: 9, y: 10 },
+            { x: 8, y: 10 }
+        ];
+    }
+
+    move() {
+        // Move the snake in the current direction
+        const head = { ...this.body[0] };
+        switch (this.direction) {
+            case "up":
+                head.y--;
+                break;
+            case "down":
+                head.y++;
+                break;
+            case "left":
+                head.x--;
+                break;
+            case "right":
+                head.x++;
+                break;
+        }
+        this.body.unshift(head);
+        this.body.pop();
+    }
+
+    changeDirection(direction) {
+        // Change the direction of the snake
+        this.direction = direction;
+    }
+}
+
+// Food class to represent the food in the game
+class Food {
+    constructor() {
+        // Initialize food properties
+        this.position = { x: 5, y: 5 };
+    }
+
+    generatePosition() {
+        // Generate a new random position for the food
+        this.position = {
+            x: Math.floor(Math.random() * 20),
+            y: Math.floor(Math.random() * 20)
+        };
+    }
+}
+
+// Game class to manage the game state
+class Game {
+    constructor() {
+        // Initialize game properties
+        this.canvas = document.getElementById("gameCanvas");
+        this.context = this.canvas.getContext("2d");
+        this.snake = new Snake();
+        this.food = new Food();
+        this.score = 0;
+        this.gameOver = false;
+        this.interval = null;
+    }
+
+    start() {
+        // Start the game
+        this.interval = setInterval(() => {
+            this.update();
+            this.render();
+        }, 200);
+    }
+
+    end() {
+        // End the game
+        clearInterval(this.interval);
+        this.gameOver = true;
+        alert("Game Over");
+    }
+
+    update() {
+        // Update the game state
+        this.snake.move();
+
+        // Check if the snake has collided with the wall
+        const head = this.snake.body[0];
+        if (
+            head.x < 0 ||
+            head.x >= this.canvas.width / 10 ||
+            head.y < 0 ||
+            head.y >= this.canvas.height / 10
+        ) {
+            this.end();
+            return;
+        }
+
+        // Check if the snake has collided with itself
+        for (let i = 1; i < this.snake.body.length; i++) {
+            if (head.x === this.snake.body[i].x && head.y === this.snake.body[i].y) {
+                this.end();
+                return;
+            }
+        }
+
+        // Check if the snake has eaten the food
+        if (head.x === this.food.position.x && head.y === this.food.position.y) {
+            this.snake.body.push({});
+            this.food.generatePosition();
+            this.score++;
+        }
+    }
+
+    render() {
+        // Render the game on the canvas
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Render the snake
+        this.context.fillStyle = "green";
+        for (let i = 0; i < this.snake.body.length; i++) {
+            const { x, y } = this.snake.body[i];
+            this.context.fillRect(x * 10, y * 10, 10, 10);
+        }
+
+        // Render the food
+        this.context.fillStyle = "red";
+        const { x, y } = this.food.position;
+        this.context.fillRect(x * 10, y * 10, 10, 10);
+
+        // Render the score
+        this.context.fillStyle = "black";
+        this.context.font = "20px Arial";
+        this.context.fillText(`Score: ${this.score}`, 10, 20);
+    }
+}
+
+// Event listeners to handle keyboard input
+document.addEventListener("keydown", function(event) {
+    const direction = getDirection(event.keyCode);
+    if (direction) {
+        game.snake.changeDirection(direction);
+    }
+});
+
+function getDirection(keyCode) {
+    switch (keyCode) {
+        case 37:
+            return "left";
+        case 38:
+            return "up";
+        case 39:
+            return "right";
+        case 40:
+            return "down";
+        default:
+            return null;
+    }
+}
+
+// Create an instance of the Game class
+const game = new Game();
+
+// Start the game
+game.start();
+```
+"""
+
+
+TEST_PSEUDOCODE =  """index.html
+```html
+<!-- The main HTML file for the game interface -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -253,218 +460,68 @@ code explanation: This file is the main HTML file for the game interface. It con
 </html>
 ```
 
-filepath:style.css
-code explanation: This file is used to style the game interface. It contains CSS styles for the game area, score display, and game over message.
-
+style.css
 ```css
+/* CSS file to style the game interface */
 #game-area {
-  /* CSS styles for the game area */
+  /* styling for the game area */
 }
 
 #score-display {
-  /* CSS styles for the score display */
+  /* styling for the score display */
 }
 
 #game-over-message {
-  /* CSS styles for the game over message */
+  /* styling for the game over message */
 }
 ```
 
-filepath:script.js
-code explanation: This file contains the game logic. It defines variables for game elements and state, and implements functions to initialize the game, handle keyboard inputs, update the game state, render the game interface, start and end the game, restart the game, pause or resume the game, handle game over conditions, generate random food position, check for collisions, update the score display, update the snake's position and length, handle snake movement, handle snake eating food, and handle the game timer.
-
+script.js
 ```javascript
-// Define variables for game elements and state
-let gameArea;
-let scoreDisplay;
-let gameOverMessage;
-let snake;
-let food;
-let score;
-let gameIsOver;
-let gameTimer;
+// JavaScript file to handle the game logic
 
 // Function to initialize the game
 function initializeGame() {
-  gameArea = document.getElementById('game-area');
-  scoreDisplay = document.getElementById('score-display');
-  gameOverMessage = document.getElementById('game-over-message');
-  snake = [{ x: 0, y: 0 }];
-  food = { x: 0, y: 0 };
-  score = 0;
-  gameIsOver = false;
-  gameTimer = null;
-
-  renderGameInterface();
-  startGame();
+  // Code to initialize the game
 }
 
-// Function to handle keyboard inputs
+// Function to handle keyboard input and control the snake's movement
 function handleKeyboardInput(event) {
-  if (event.key === 'ArrowUp' && snake[0].y !== -1) {
-    snake[0].y = -1;
-    snake[0].x = 0;
-  } else if (event.key === 'ArrowDown' && snake[0].y !== 1) {
-    snake[0].y = 1;
-    snake[0].x = 0;
-  } else if (event.key === 'ArrowLeft' && snake[0].x !== -1) {
-    snake[0].x = -1;
-    snake[0].y = 0;
-  } else if (event.key === 'ArrowRight' && snake[0].x !== 1) {
-    snake[0].x = 1;
-    snake[0].y = 0;
-  }
+  // Code to handle keyboard input
 }
 
-// Function to update the game state
-function updateGameState() {
-  updateSnake();
-  handleSnakeEatingFood();
-  checkCollisions();
-  updateScoreDisplay();
+// Function to generate food for the snake to eat
+function generateFood() {
+  // Code to generate food
 }
 
-// Function to render the game interface
-function renderGameInterface() {
-  gameArea.innerHTML = '';
-  for (let y = 0; y < 20; y++) {
-    for (let x = 0; x < 20; x++) {
-      const cell = document.createElement('div');
-      cell.classList.add('cell');
-      if (x === food.x && y === food.y) {
-        cell.classList.add('food');
-      }
-      for (const segment of snake) {
-        if (segment.x === x && segment.y === y) {
-          cell.classList.add('snake');
-        }
-      }
-      gameArea.appendChild(cell);
-    }
-  }
-  scoreDisplay.textContent = `Score: ${score}`;
-  gameOverMessage.textContent = '';
+// Function to update the snake's position based on its movement
+function updateSnakePosition() {
+  // Code to update the snake's position
 }
 
-// Function to start the game
-function startGame() {
-  document.addEventListener('keydown', handleKeyboardInput);
-  gameTimer = setInterval(() => {
-    if (!gameIsOver) {
-      updateGameState();
-      renderGameInterface();
-    }
-  }, 200);
-}
-
-// Function to end the game
-function endGame() {
-  gameIsOver = true;
-  clearInterval(gameTimer);
-  gameOverMessage.textContent = `Game Over! Final Score: ${score}`;
-}
-
-// Function to restart the game
-function restartGame() {
-  snake = [{ x: 0, y: 0 }];
-  food = { x: 0, y: 0 };
-  score = 0;
-  gameIsOver = false;
-  renderGameInterface();
-  startGame();
-}
-
-// Function to pause or resume the game
-function togglePauseGame() {
-  if (gameIsOver) {
-    return;
-  }
-  if (gameTimer) {
-    clearInterval(gameTimer);
-    gameTimer = null;
-  } else {
-    gameTimer = setInterval(() => {
-      if (!gameIsOver) {
-        updateGameState();
-        renderGameInterface();
-      }
-    }, 200);
-  }
-}
-
-// Function to handle game over conditions
-function handleGameOver() {
-  const head = snake[0];
-  if (head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20) {
-    endGame();
-  }
-  for (let i = 1; i < snake.length; i++) {
-    if (head.x === snake[i].x && head.y === snake[i].y) {
-      endGame();
-      break;
-    }
-  }
-}
-
-// Function to generate random food position
-function generateFoodPosition() {
-  food.x = Math.floor(Math.random() * 20);
-  food.y = Math.floor(Math.random() * 20);
-}
-
-// Function to check for collisions with walls or snake body
+// Function to check for collisions with the wall or the snake's own body
 function checkCollisions() {
-  handleGameOver();
+  // Code to check for collisions
 }
 
-// Function to update the score display
+// Function to handle the snake eating food and increasing its length
+function handleFoodEating() {
+  // Code to handle food eating
+}
+
+// Function to update the score display when the snake eats food
 function updateScoreDisplay() {
-  scoreDisplay.textContent = `Score: ${score}`;
+  // Code to update the score display
 }
 
-// Function to update the snake's position and length
-function updateSnake() {
-  const head = { x: snake[0].x, y: snake[0].y };
-  snake.unshift(head);
-  if (head.x === food.x && head.y === food.y) {
-    score++;
-    generateFoodPosition();
-  } else {
-    snake.pop();
-  }
+// Function to end the game and display the game over message
+function endGame() {
+  // Code to end the game
 }
 
-// Function to handle snake movement
-function handleSnakeMovement() {
-  const head = snake[0];
-  head.x += head.x;
-  head.y += head.y;
-}
+// Event listener to start the game when the page loads
+window.addEventListener('load', initializeGame);
 
-// Function to handle snake eating food
-function handleSnakeEatingFood() {
-  const head = snake[0];
-  if (head.x === food.x && head.y === food.y) {
-    score++;
-    generateFoodPosition();
-  }
-}
-
-// Function to handle game timer
-function handleGameTimer() {
-  if (!gameIsOver) {
-    updateGameState();
-    renderGameInterface();
-  }
-}
-
-// Function to handle game initialization
-function handleGameInitialization() {
-  initializeGame();
-}
-
-// Call the function to initialize the game
-handleGameInitialization();
-```
-
-Please note that the above code is a complete implementation of the Snake Game based on the provided development specification and requirements. However, it may require additional styling and fine-tuning to meet specific design preferences and performance optimizations."""
+// Event listener to handle keyboard input
+window.addEventListener('keydown', handleKeyboardInput);"""
